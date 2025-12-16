@@ -1,18 +1,13 @@
-# Dependencias
 node_modules/
-backend/node_modules/
-
-# Entornos
+dist/
 .env
+
+backend/node_modules/
 backend/.env
 
-# Build
-dist/
+# DATA (no subir PDFs ni embeddings)
+backend/data/libros/
+backend/data/chunks/
 
-# Datos RAG (NO subir)
-backend/data/
-backend/data/**
-
-# Embeddings / PDFs / chunks
-*.jsonl
-chunks.json
+# Opcional: venv python
+backend/venv/
