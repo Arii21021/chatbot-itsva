@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const API_BASE = "http://localhost:4000/api";
 
@@ -8,22 +9,16 @@ const INITIAL_MESSAGE = {
   content: "Hola, soy el Asistente IA del ITSVA. ¿En qué puedo ayudarte hoy?",
 };
 
-// 🧩 Arreglo: convertir el estilo raro con `||` en tabla Markdown válida
+// Convierte el estilo raro con `||` en tabla Markdown válida
 const formatAssistantMarkdown = (text) => {
   if (!text) return "";
-
   let fixed = text.trim();
-
-  // 1) Cada vez que el modelo pone "||" lo tomamos como "salto de línea + |"
-  // Ej: "| Col1 | Col2 || --- | --- || fila1 | fila2 |"
-  fixed = fixed.replace(/\|\|\s*/g, "\n|");
-
-  // 2) Opcional: aseguramos que no queden cosas tipo "| --- | --- | --- ||"
-  // (si queda doble barra final la limpiamos un poco)
+  fixed = fixed.replace(/\|\|\s*/g, "\n");
   fixed = fixed.replace(/\|\s*\n/g, "|\n");
-
   return fixed;
 };
+
+const THEME_KEY = "itsva_theme"; // dark | light
 
 export default function Chatbot({ user, onLogout }) {
   const [messages, setMessages] = useState([INITIAL_MESSAGE]);
@@ -34,27 +29,52 @@ export default function Chatbot({ user, onLogout }) {
   const [conversations, setConversations] = useState([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
 
-  // para autoscroll al último mensaje
+  const [theme, setTheme] = useState("dark");
+
   const messagesEndRef = useRef(null);
 
-  // --------- Cargar historial ----------
+  /* ======================
+     TEMA (load + toggle)
+     ====================== */
+  useEffect(() => {
+    const saved = localStorage.getItem(THEME_KEY);
+    const initialTheme = saved === "light" ? "light" : "dark";
+    setTheme(initialTheme);
+
+    if (initialTheme === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      localStorage.setItem(THEME_KEY, next);
+
+      if (next === "light") {
+        document.documentElement.setAttribute("data-theme", "light");
+      } else {
+        document.documentElement.removeAttribute("data-theme");
+      }
+      return next;
+    });
+  };
+
+  /* ======================
+     HISTORIAL
+     ====================== */
   const fetchConversations = async () => {
     try {
       setLoadingConversations(true);
       const res = await fetch(`${API_BASE}/chat/history`, {
-        headers: {
-          Authorization: `Bearer ${user.token}`,
-        },
+        headers: { Authorization: `Bearer ${user.token}` },
       });
-
       const data = await res.json();
-      if (res.ok) {
-        setConversations(data.conversations || []);
-      } else {
-        console.error("Error al obtener historial:", data.error);
-      }
+      if (res.ok) setConversations(data.conversations || []);
     } catch (err) {
-      console.error("Error al obtener historial:", err);
+      console.error("Error historial:", err);
     } finally {
       setLoadingConversations(false);
     }
@@ -62,16 +82,19 @@ export default function Chatbot({ user, onLogout }) {
 
   useEffect(() => {
     fetchConversations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
 
-  // 🔽 autoscroll cuando cambian los mensajes
+  /* ======================
+     AUTOSCROLL
+     ====================== */
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isSending]);
 
-  // --------- Enviar mensaje ----------
+  /* ======================
+     ENVIAR MENSAJE
+     ====================== */
   const handleSend = async (e) => {
     e.preventDefault();
     const text = input.trim();
@@ -101,12 +124,7 @@ export default function Chatbot({ user, onLogout }) {
       if (!res.ok) {
         setMessages((prev) => [
           ...prev,
-          {
-            role: "assistant",
-            content:
-              data.error ||
-              "Ocurrió un error al comunicarme con el modelo de IA.",
-          },
+          { role: "assistant", content: data.error || "Error del servidor." },
         ]);
         return;
       }
@@ -122,13 +140,13 @@ export default function Chatbot({ user, onLogout }) {
 
       fetchConversations();
     } catch (err) {
-      console.error("Error en el chat frontend:", err);
+      console.error(err);
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
           content:
-            "No pude conectarme con el servidor de IA. Verifica que LM Studio esté encendido.",
+            "No pude conectarme con el servidor de IA. Verifica LM Studio.",
         },
       ]);
     } finally {
@@ -136,124 +154,98 @@ export default function Chatbot({ user, onLogout }) {
     }
   };
 
-  // --------- Nuevo chat ----------
+  /* ======================
+     CHAT CRUD
+     ====================== */
   const handleNewChat = () => {
     setConversationId(null);
     setMessages([INITIAL_MESSAGE]);
   };
 
-  // --------- Abrir chat ----------
   const handleOpenConversation = async (id) => {
     try {
       const res = await fetch(`${API_BASE}/chat/conversation/${id}`, {
-        headers: {
-          Authorization: `Bearer ${user.token}`,
-        },
+        headers: { Authorization: `Bearer ${user.token}` },
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        console.error("Error al cargar conversación:", data.error);
-        return;
-      }
-
-      if (data.conversation && Array.isArray(data.conversation.messages)) {
+      if (res.ok && data.conversation?.messages) {
         setConversationId(data.conversation._id);
         setMessages(data.conversation.messages);
       }
     } catch (err) {
-      console.error("Error al cargar conversación:", err);
+      console.error(err);
     }
   };
 
-  // --------- Renombrar ----------
   const handleRenameConversation = async (conv) => {
-    const nuevoTitulo = window.prompt(
-      "Nuevo título para este chat:",
-      conv.title || ""
+    const nuevoTitulo = window.prompt("Nuevo título:", conv.title || "");
+    if (!nuevoTitulo?.trim()) return;
+
+    await fetch(`${API_BASE}/chat/conversation/${conv._id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${user.token}`,
+      },
+      body: JSON.stringify({ title: nuevoTitulo }),
+    });
+
+    setConversations((prev) =>
+      prev.map((c) =>
+        c._id === conv._id ? { ...c, title: nuevoTitulo } : c
+      )
     );
-    if (!nuevoTitulo || !nuevoTitulo.trim()) return;
-
-    try {
-      const res = await fetch(`${API_BASE}/chat/conversation/${conv._id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user.token}`,
-        },
-        body: JSON.stringify({ title: nuevoTitulo }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.error("Error al renombrar conversación:", data.error);
-        return;
-      }
-
-      setConversations((prev) =>
-        prev.map((c) => (c._id === conv._id ? { ...c, title: nuevoTitulo } : c))
-      );
-    } catch (err) {
-      console.error("Error al renombrar conversación:", err);
-    }
   };
 
-  // --------- Eliminar ----------
   const handleDeleteConversation = async (id) => {
-    const confirmar = window.confirm(
-      "¿Seguro que quieres eliminar este chat? Esta acción no se puede deshacer."
-    );
-    if (!confirmar) return;
+    if (!window.confirm("¿Eliminar este chat?")) return;
 
-    try {
-      const res = await fetch(`${API_BASE}/chat/conversation/${id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${user.token}`,
-        },
-      });
+    await fetch(`${API_BASE}/chat/conversation/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${user.token}` },
+    });
 
-      const data = await res.json();
-      if (!res.ok) {
-        console.error("Error al eliminar conversación:", data.error);
-        return;
-      }
+    setConversations((prev) => prev.filter((c) => c._id !== id));
 
-      setConversations((prev) => prev.filter((c) => c._id !== id));
-
-      if (conversationId === id) {
-        setConversationId(null);
-        setMessages([INITIAL_MESSAGE]);
-      }
-    } catch (err) {
-      console.error("Error al eliminar conversación:", err);
+    if (conversationId === id) {
+      setConversationId(null);
+      setMessages([INITIAL_MESSAGE]);
     }
   };
 
-  // --------- Render ----------
+  /* ======================
+     RENDER
+     ====================== */
   return (
     <div className="chat-page">
-      {/* HEADER SUPERIOR */}
+      {/* HEADER */}
       <header className="chat-top-header">
+        {/* IZQUIERDA */}
         <div className="chat-top-left">
-          {/* LOGO ITSVA */}
-          <div className="chat-logo-placeholder">
-            <img
-              src="/itsva-logo.png"
-              alt="Instituto Tecnológico Superior de Valladolid"
-            />
-          </div>
-
           <h2 className="chat-title">ITSVA · Chat IA</h2>
         </div>
 
-        <button className="logout-button" onClick={onLogout}>
-          Cerrar sesión
-        </button>
+        {/* CENTRO */}
+        <div className="chat-top-center">
+          <img
+            src="/logo encabezado.png"
+            alt="Tecnológico Nacional de México"
+            className="chat-header-logo"
+          />
+        </div>
+
+        {/* DERECHA */}
+        <div className="chat-top-right">
+          <button className="theme-button" onClick={toggleTheme}>
+            {theme === "dark" ? "Claro" : "Oscuro"}
+          </button>
+          <button className="logout-button" onClick={onLogout}>
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
-      {/* LAYOUT PRINCIPAL */}
+      {/* BODY */}
       <div className="chat-layout">
         {/* SIDEBAR */}
         <aside className="chat-sidebar">
@@ -266,11 +258,9 @@ export default function Chatbot({ user, onLogout }) {
 
           <div className="chat-list">
             {loadingConversations ? (
-              <div className="chat-list-empty">Cargando chats…</div>
+              <div className="chat-list-empty">Cargando…</div>
             ) : conversations.length === 0 ? (
-              <div className="chat-list-empty">
-                Aún no tienes conversaciones guardadas.
-              </div>
+              <div className="chat-list-empty">Sin conversaciones.</div>
             ) : (
               conversations.map((conv) => (
                 <div
@@ -282,28 +272,24 @@ export default function Chatbot({ user, onLogout }) {
                   onClick={() => handleOpenConversation(conv._id)}
                 >
                   <div className="chat-list-item-title">{conv.title}</div>
-
                   <div className="chat-list-item-actions">
                     <button
                       className="chat-list-icon"
-                      title="Renombrar"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleRenameConversation(conv);
                       }}
                     >
-                      ✏️
+                      Renombrar
                     </button>
-
                     <button
                       className="chat-list-icon"
-                      title="Eliminar"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDeleteConversation(conv._id);
                       }}
                     >
-                      🗑
+                      Eliminar
                     </button>
                   </div>
                 </div>
@@ -312,7 +298,7 @@ export default function Chatbot({ user, onLogout }) {
           </div>
         </aside>
 
-        {/* ZONA DE CHAT */}
+        {/* CHAT */}
         <div className="chat-main">
           <main className="chat-body">
             <div className="chat-messages">
@@ -325,7 +311,7 @@ export default function Chatbot({ user, onLogout }) {
                 >
                   <div className="chat-bubble">
                     {msg.role === "assistant" ? (
-                      <ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {formatAssistantMarkdown(msg.content)}
                       </ReactMarkdown>
                     ) : (

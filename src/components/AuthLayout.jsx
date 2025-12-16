@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 const API_BASE = "http://localhost:4000/api";
+const THEME_KEY = "itsva_theme"; // dark | light
 
 export default function AuthLayout({ onAuthSuccess }) {
   // vistas: login | register | forgot
@@ -12,6 +13,18 @@ export default function AuthLayout({ onAuthSuccess }) {
     const regex = /^[lL][0-9]+@valladolid\.tecnm\.mx$/;
     return regex.test(value.trim());
   };
+
+  // --------- tema (load + apply) ----------
+  useEffect(() => {
+    const saved = localStorage.getItem(THEME_KEY);
+    const initial = saved === "light" ? "light" : "dark";
+
+    if (initial === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }, []);
 
   // --- estados login ---
   const [loginEmail, setLoginEmail] = useState("");
@@ -37,7 +50,7 @@ export default function AuthLayout({ onAuthSuccess }) {
   const [forgotError, setForgotError] = useState("");
   const [forgotInfo, setForgotInfo] = useState("");
 
-  // ----------------- LOGIN (ahora llama al backend) -----------------
+  // ----------------- LOGIN -----------------
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setLoginError("");
@@ -59,13 +72,8 @@ export default function AuthLayout({ onAuthSuccess }) {
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: loginEmail,
-          password: loginPass,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail, password: loginPass }),
       });
 
       const data = await res.json();
@@ -75,7 +83,6 @@ export default function AuthLayout({ onAuthSuccess }) {
         return;
       }
 
-      // Usuario real desde backend
       onAuthSuccess({
         id: data.user.id,
         name: data.user.name,
@@ -90,7 +97,7 @@ export default function AuthLayout({ onAuthSuccess }) {
     }
   };
 
-  // ----------------- REGISTRO (ahora llama al backend) -----------------
+  // ----------------- REGISTRO -----------------
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     setRegError("");
@@ -117,9 +124,7 @@ export default function AuthLayout({ onAuthSuccess }) {
     try {
       const res = await fetch(`${API_BASE}/auth/register`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: regName,
           email: regEmail,
@@ -135,7 +140,6 @@ export default function AuthLayout({ onAuthSuccess }) {
         return;
       }
 
-      // Usuario real desde backend
       onAuthSuccess({
         id: data.user.id,
         name: data.user.name,
@@ -150,7 +154,7 @@ export default function AuthLayout({ onAuthSuccess }) {
     }
   };
 
-  // ----------------- OLVIDÉ MI CONTRASEÑA (sigue en modo demo) -----------------
+  // ----------------- OLVIDÉ MI CONTRASEÑA (demo) -----------------
   const handleForgotEmailSubmit = (e) => {
     e.preventDefault();
     setForgotError("");
@@ -203,14 +207,32 @@ export default function AuthLayout({ onAuthSuccess }) {
     setForgotCode("");
   };
 
-  // ----------------- RENDER -----------------
   return (
     <div className="auth-page">
+      {/* Logo grande arriba / fondo (fuera del cuadro) */}
+      <div className="auth-hero">
+        <img
+          src="/Logo-login.png"
+          alt="Tecnológico Nacional de México"
+          className="auth-hero-logo"
+        />
+      </div>
+
       <div className="auth-card">
-        <h1 className="app-title">ITSVA · Chat IA</h1>
-        <p className="app-subtitle">
-          Accede con tu correo institucional para utilizar el asistente académico.
-        </p>
+        {/* Header de la tarjeta: logo pequeño + título */}
+        <div className="auth-card-header">
+          <img
+            src="/itsva-logo.png"
+            alt="ITSVA"
+            className="auth-card-logo"
+          />
+          <div>
+            <h1 className="app-title">ITSVA · Chat IA</h1>
+            <p className="app-subtitle">
+              Accede con tu correo institucional para utilizar el asistente académico.
+            </p>
+          </div>
+        </div>
 
         {/* Tabs solo para login y registro */}
         {view !== "forgot" && (
@@ -280,10 +302,7 @@ export default function AuthLayout({ onAuthSuccess }) {
               <br />
               <span>
                 ¿No tienes cuenta?{" "}
-                <span
-                  className="auth-link"
-                  onClick={() => setView("register")}
-                >
+                <span className="auth-link" onClick={() => setView("register")}>
                   Regístrate
                 </span>
               </span>
@@ -349,10 +368,7 @@ export default function AuthLayout({ onAuthSuccess }) {
             <div className="auth-footer">
               <span>
                 ¿Ya tienes cuenta?{" "}
-                <span
-                  className="auth-link"
-                  onClick={() => setView("login")}
-                >
+                <span className="auth-link" onClick={() => setView("login")}>
                   Inicia sesión
                 </span>
               </span>
@@ -366,14 +382,10 @@ export default function AuthLayout({ onAuthSuccess }) {
             {forgotStep === "email" && (
               <>
                 <p className="app-subtitle" style={{ marginTop: "0.5rem" }}>
-                  Ingresa tu correo institucional para recibir un código de
-                  recuperación.
+                  Ingresa tu correo institucional para recibir un código de recuperación.
                 </p>
 
-                <form
-                  className="auth-form"
-                  onSubmit={handleForgotEmailSubmit}
-                >
+                <form className="auth-form" onSubmit={handleForgotEmailSubmit}>
                   <label>
                     Correo institucional
                     <input
@@ -384,18 +396,10 @@ export default function AuthLayout({ onAuthSuccess }) {
                     />
                   </label>
 
-                  {forgotError && (
-                    <div className="auth-error">{forgotError}</div>
-                  )}
+                  {forgotError && <div className="auth-error">{forgotError}</div>}
 
                   {forgotInfo && (
-                    <div
-                      className="auth-error"
-                      style={{
-                        background: "rgba(37,99,235,0.15)",
-                        color: "#bfdbfe",
-                      }}
-                    >
+                    <div className="auth-info">
                       {forgotInfo}
                     </div>
                   )}
@@ -406,10 +410,7 @@ export default function AuthLayout({ onAuthSuccess }) {
                 </form>
 
                 <div className="auth-footer">
-                  <span
-                    className="auth-link"
-                    onClick={() => setView("login")}
-                  >
+                  <span className="auth-link" onClick={() => setView("login")}>
                     Volver a iniciar sesión
                   </span>
                 </div>
@@ -422,10 +423,7 @@ export default function AuthLayout({ onAuthSuccess }) {
                   Ingresa el código que recibiste y crea una nueva contraseña.
                 </p>
 
-                <form
-                  className="auth-form"
-                  onSubmit={handleForgotResetSubmit}
-                >
+                <form className="auth-form" onSubmit={handleForgotResetSubmit}>
                   <label>
                     Código de verificación
                     <input
@@ -456,21 +454,9 @@ export default function AuthLayout({ onAuthSuccess }) {
                     />
                   </label>
 
-                  {forgotError && (
-                    <div className="auth-error">{forgotError}</div>
-                  )}
+                  {forgotError && <div className="auth-error">{forgotError}</div>}
 
-                  {forgotInfo && (
-                    <div
-                      className="auth-error"
-                      style={{
-                        background: "rgba(34,197,94,0.15)",
-                        color: "#bbf7d0",
-                      }}
-                    >
-                      {forgotInfo}
-                    </div>
-                  )}
+                  {forgotInfo && <div className="auth-success">{forgotInfo}</div>}
 
                   <button className="auth-button" type="submit">
                     Restablecer contraseña

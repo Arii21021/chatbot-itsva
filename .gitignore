@@ -1,5 +1,18 @@
+# Dependencias
 node_modules/
-dist/
-.env
 backend/node_modules/
+
+# Entornos
+.env
 backend/.env
+
+# Build
+dist/
+
+# Datos RAG (NO subir)
+backend/data/
+backend/data/**
+
+# Embeddings / PDFs / chunks
+*.jsonl
+chunks.json
